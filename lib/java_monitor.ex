@@ -65,7 +65,7 @@ defmodule JavaMonitor do
       {output, 0} ->
         flags = parse_jinfo_output(output)
         app_info = extract_app_info(flags)
-
+        IO.inspect(app_info, "App Info")
         %{
           pid: pid,
           flags: flags,
@@ -172,7 +172,7 @@ defmodule JavaMonitor do
       app_name: app_name,
       variant: variant,
       main_class: main_class
-    }
+    } |> IO.inspect()
   end
 
   def extract_property(flags, property_name) do
