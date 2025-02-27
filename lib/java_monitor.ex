@@ -64,6 +64,7 @@ defmodule JavaMonitor do
     flags_result = case System.cmd("jinfo", ["-flags", pid]) do
       {output, 0} ->
         flags = parse_jinfo_output(output)
+        IO.inspect(flags, label: "Flags")
         app_info = extract_app_info(flags)
         IO.inspect(app_info, label: "App Info")
         %{
