@@ -65,7 +65,7 @@ defmodule JavaMonitor do
       {output, 0} ->
         flags = parse_jinfo_output(output)
         app_info = extract_app_info(flags)
-        IO.inspect(app_info, "App Info")
+        IO.inspect(app_info, label: "App Info")
         %{
           pid: pid,
           flags: flags,
