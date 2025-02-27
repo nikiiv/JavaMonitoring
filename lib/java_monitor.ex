@@ -61,10 +61,10 @@ defmodule JavaMonitor do
   Returns a map with VM details.
   """
   def get_vm_details(pid) do
-    flags_result = case System.cmd("jinfo", ["-flags", pid]) do
+    flags_result = case System.cmd("jinfo", ["-sysprops", pid]) do
       {output, 0} ->
         flags = parse_jinfo_output(output)
-        IO.inspect(flags, label: "Flags")
+        # IO.inspect(flags, label: "Flags")
         app_info = extract_app_info(flags)
         IO.inspect(app_info, label: "App Info")
         %{
