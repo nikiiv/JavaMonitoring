@@ -145,12 +145,12 @@ defmodule JavaMonitor do
     end
   end
 
-  defp parse_jinfo_output(output) do
+  def parse_jinfo_output(output) do
     output
     |> String.trim()
     |> String.split("\n")
     |> Enum.reduce(%{}, fn line, acc ->
-      case Regex.run(~r/-([^=\s]+)(?:=([^\s]+))?/, line) do
+      case Regex.run(~r/([^=\s]+)(?:=([^\s]+))?/, line) do
         [_, key, value] -> Map.put(acc, key, value)
         [_, key] -> Map.put(acc, key, true)
         _ -> acc
@@ -158,7 +158,7 @@ defmodule JavaMonitor do
     end)
   end
 
-  defp extract_app_info(flags) do
+  def extract_app_info(flags) do
     # Extract application name from com.netfolio.appname
     app_name = extract_property(flags, "com.netfolio.appname")
 
@@ -175,7 +175,7 @@ defmodule JavaMonitor do
     }
   end
 
-  defp extract_property(flags, property_name) do
+  def extract_property(flags, property_name) do
     flags
     |> Map.keys()
     |> Enum.find_value("unknown", fn key ->
@@ -183,7 +183,7 @@ defmodule JavaMonitor do
     end)
   end
 
-  defp extract_main_class(flags) do
+  def extract_main_class(flags) do
     case Map.get(flags, "sun.java.command") do
       nil -> "unknown"
       command -> hd(String.split(command, " "))
