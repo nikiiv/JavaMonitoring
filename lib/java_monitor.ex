@@ -4,8 +4,10 @@ defmodule JavaMonitor do
   Monitors Java Virtual Machines by collecting information using JDK tools.
   """
 
-  alias JavaMonitor.{JvmData}
+  alias JavaMonitor.JvmData
+  alias JavaMonitor.Parser
 
+  @spec list_java_vms() :: list()
   @doc """
   Lists all running Java VMs using jps command.
   Returns a list of {pid, name} tuples.
@@ -16,7 +18,7 @@ defmodule JavaMonitor do
         output
         |> String.trim()
         |> String.split("\n")
-        |> Enum.map(&parse_jps_line/1)
+        |> Enum.map(&Parser.parse_jps_line/1)
         |> Enum.reject(fn {_pid, name} -> name == "jdk.jcmd/sun.tools.jps.Jps" end)
 
       {error, _} ->
@@ -25,23 +27,22 @@ defmodule JavaMonitor do
     end
   end
 
-  defp parse_jps_line(line) do
-    case String.split(line, " ", parts: 2) do
-      [pid, name] -> {pid, name}
-      [pid] -> {pid, "Unknown"}
-    end
-  end
-
   @doc """
   Gets detailed VM information for a specific PID using jinfo.
   Returns a map with VM details.
   """
   def get_vm_details(pid) do
-    flags_result = case System.cmd("jinfo", ["-sysprops", pid]) do
+    flags_result = case System.cmd("jinfo", ["-sysprops",pid]) do
       {output, 0} ->
-        flags = parse_jinfo_output(output)
-        # IO.inspect(flags, label: "Flags")
-        app_info = extract_app_info(flags)
+        flags = Parser.parse_jinfo_output(output)
+        flags
+        |> Enum.each(fn {key, value} ->
+          IO.puts("PAIR:  #{key}: #{value}")
+
+        end)
+
+
+        app_info = Parser.extract_app_info(flags)
         IO.inspect(app_info, label: "App Info")
         %{
           pid: pid,
@@ -67,7 +68,7 @@ defmodule JavaMonitor do
   def get_gc_info(pid) do
     case System.cmd("jstat", ["-gc", pid]) do
       {output, 0} ->
-        parse_jstat_output(output)
+        Parser.parse_jstat_output(output)
       {error, _} ->
         IO.puts("Error executing jstat for PID #{pid}: #{error}")
         %{
@@ -82,90 +83,7 @@ defmodule JavaMonitor do
     end
   end
 
-  defp parse_jstat_output(output) do
-    lines = String.split(output, "\n", trim: true)
 
-    case lines do
-      [header, values | _] ->
-        headers = String.split(header, ~r/\s+/, trim: true)
-        value_list = String.split(values, ~r/\s+/, trim: true)
-
-        # Create a map of header -> value
-        data = Enum.zip(headers, value_list) |> Enum.into(%{})
-
-        # Extract specific GC metrics
-        %{
-          # Old generation maximum size (in KB)
-          old_gen_max: get_value(data, "OC"),
-          # Old generation current size (in KB)
-          old_gen_current: get_value(data, "OU"),
-          # Young generation GC count
-          ygc_count: get_value(data, "YGC"),
-          # Young generation GC time (seconds)
-          ygc_time: get_value(data, "YGCT"),
-          # Full GC count
-          fgc_count: get_value(data, "FGC"),
-          # Full GC time (seconds)
-          fgc_time: get_value(data, "FGCT"),
-          # Total GC time (seconds)
-          gc_total_time: get_value(data, "GCT")
-        }
-      _ ->
-        %{gc_error: "Invalid jstat output format"}
-    end
-  end
-
-  defp get_value(data, key) do
-    case Map.get(data, key) do
-      nil -> "N/A"
-      value -> value
-    end
-  end
-
-  def parse_jinfo_output(output) do
-    output
-    |> String.trim()
-    |> String.split("\n")
-    |> Enum.reduce(%{}, fn line, acc ->
-      case Regex.run(~r/([^=\s]+)(?:=([^\s]+))?/, line) do
-        [_, key, value] -> Map.put(acc, key, value)
-        [_, key] -> Map.put(acc, key, true)
-        _ -> acc
-      end
-    end)
-  end
-
-  def extract_app_info(flags) do
-    # Extract application name from com.netfolio.appname
-    app_name = extract_property(flags, "com.netfolio.appname")
-
-    # Extract variant from com.netfolio.fullname
-    variant = extract_property(flags, "com.netfolio.fullname")
-
-    # Extract main class from sun.java.command or similar property
-    main_class = extract_main_class(flags)
-
-    %{
-      app_name: app_name,
-      variant: variant,
-      main_class: main_class
-    } |> IO.inspect()
-  end
-
-  def extract_property(flags, property_name) do
-    flags
-    |> Map.keys()
-    |> Enum.find_value("unknown", fn key ->
-      if String.starts_with?(key, property_name), do: flags[key], else: nil
-    end)
-  end
-
-  def extract_main_class(flags) do
-    case Map.get(flags, "sun.java.command") do
-      nil -> "unknown"
-      command -> hd(String.split(command, " "))
-    end
-  end
   @doc """
   Saves the current monitoring data to a JSON file.
   """
