@@ -1,34 +1,10 @@
+# lib/java_monitor.ex
 defmodule JavaMonitor do
   @moduledoc """
   Monitors Java Virtual Machines by collecting information using JDK tools.
   """
 
-  defmodule JvmData do
-    @moduledoc """
-    Struct representing Java Virtual Machine monitoring data.
-    """
-    defstruct [
-      # System info
-      :hostname,
-      :timestamp,
-      # VM identity
-      :pid,
-      :name,
-      :app_name,
-      :app_variant,
-      :main_class,
-      # GC metrics
-      :old_gen_max,
-      :old_gen_current,
-      :ygc_count,
-      :ygc_time,
-      :fgc_count,
-      :fgc_time,
-      :gc_total_time,
-      # Raw data
-      :flags
-    ]
-  end
+  alias JavaMonitor.{JvmData}
 
   @doc """
   Lists all running Java VMs using jps command.
@@ -332,54 +308,5 @@ defmodule JavaMonitor do
 
       IO.puts(String.duplicate("-", 40))
     end)
-  end
-  end
-
-# Application supervisor and setup
-defmodule JavaMonitor.Application do
-  use Application
-
-  def start(_type, _args) do
-    children = [
-      # Define your supervision tree
-    ]
-
-    opts = [strategy: :one_for_one, name: JavaMonitor.Supervisor]
-    Supervisor.start_link(children, opts)
-  end
-end
-
-# CLI interface for standalone usage
-defmodule JavaMonitor.CLI do
-  def main(args) do
-    {opts, _, _} = OptionParser.parse(args,
-      switches: [interval: :integer, once: :boolean, export: :string],
-      aliases: [i: :interval, o: :once, e: :export]
-    )
-
-    interval = Keyword.get(opts, :interval, 5000)
-    once = Keyword.get(opts, :once, false)
-    export_file = Keyword.get(opts, :export)
-
-    # Create ETS table
-    :ets.new(:jvm_history, [:named_table, :public, :set])
-
-    if once do
-      vms = JavaMonitor.monitor_all_vms()
-      JavaMonitor.print_vm_info(vms)
-
-      if export_file do
-        JavaMonitor.save_to_json(vms, export_file)
-        IO.puts("Data exported to #{export_file}")
-      end
-    else
-      pid = JavaMonitor.start_monitoring(interval)
-
-      # Keep the application running
-      Process.monitor(pid)
-      receive do
-        {:DOWN, _, :process, ^pid, _} -> :ok
-      end
-    end
   end
 end
