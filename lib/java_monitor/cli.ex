@@ -13,6 +13,20 @@ defmodule JavaMonitor.CLI do
     once = Keyword.get(opts, :once, false)
     export_file = Keyword.get(opts, :export)
 
+    # Get a list of all ETS tables
+    tables = :ets.all()
+
+    IO.inspect(tables)
+    :ets.info(:jvm_history) |> IO.inspect(label: "ets table")
+    # Delete ETS table if exists
+    case :ets.info(:jvm_history) do
+      :undefined ->
+        IO.puts("Table #{inspect(:jvm_history)} does not exist.")
+      _info ->
+        :ets.delete(:jvm_history)
+        IO.puts("Table #{inspect(:jvm_history)} has been deleted.")
+    end
+
     # Create ETS table
     :ets.new(:jvm_history, [:named_table, :public, :set])
 

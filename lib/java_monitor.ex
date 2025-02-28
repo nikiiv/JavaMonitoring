@@ -31,16 +31,16 @@ defmodule JavaMonitor do
   Gets detailed VM information for a specific PID using jinfo.
   Returns a map with VM details.
   """
-  def get_vm_details(pid) do
-    flags_result = case System.cmd("jinfo", ["-sysprops",pid]) do
-      {output, 0} ->
-        flags = Parser.parse_jinfo_output(output)
-        flags
-        |> Enum.each(fn {key, value} ->
-          IO.puts("PAIR:  #{key}: #{value}")
-
-        end)
-
+  def get_vm_details(pid) when is_integer(pid) do
+    get_vm_details(Integer.to_string(pid))
+  end
+  def get_vm_details(pid) when is_binary(pid) do
+    flags_result =
+      case {System.cmd("jinfo", ["-sysprops", pid]), System.cmd("jinfo", ["-flags", pid])} do
+        {{output_sys, 0}, {output_flags, 0}} ->
+            flags_sys = Parser.parse_jinfo_output(output_sys)
+            flags_flags = Parser.parse_flags_output(output_flags)
+            flags = Map.merge(flags_sys, flags_flags)
 
         app_info = Parser.extract_app_info(flags)
         IO.inspect(app_info, label: "App Info")
@@ -49,12 +49,19 @@ defmodule JavaMonitor do
           flags: flags,
           app_name: app_info.app_name,
           app_variant: app_info.variant,
-          main_class: app_info.main_class
+            main_class: app_info.main_class,
+            max_heap_size: app_info.max_heap_size
         }
 
-      {error, _} ->
-        IO.puts("Error executing jinfo for PID #{pid}: #{error}")
+        {{error_sys, _}, {error_flags, _}} ->
+          IO.puts("Error executing jinfo for PID #{pid}: #{error_sys} or #{error_flags}")
         %{pid: pid, error: "Failed to get VM details"}
+        {{error_sys, _}, _} ->
+            IO.puts("Error executing jinfo -sysprops for PID #{pid}: #{error_sys}")
+            %{pid: pid, error: "Failed to get VM details for sysprops"}
+        {_, {error_flags, _}} ->
+            IO.puts("Error executing jinfo -flags for PID #{pid}: #{error_flags}")
+            %{pid: pid, error: "Failed to get VM details for flags"}
     end
 
     # Add GC information
@@ -62,10 +69,17 @@ defmodule JavaMonitor do
     Map.merge(flags_result, gc_info)
   end
 
+
+
+
   @doc """
   Gets garbage collection information for a specific PID using jstat.
   """
-  def get_gc_info(pid) do
+  def get_gc_info(pid) when is_integer(pid) do
+    get_gc_info(Integer.to_string(pid))
+  end
+
+  def get_gc_info(pid) when is_binary(pid) do
     case System.cmd("jstat", ["-gc", pid]) do
       {output, 0} ->
         Parser.parse_jstat_output(output)
@@ -127,6 +141,7 @@ defmodule JavaMonitor do
         app_name: details[:app_name],
         app_variant: details[:app_variant],
         main_class: details[:main_class],
+        max_heap_size: details[:max_heap_size],
         # GC metrics
         old_gen_max: details[:old_gen_max],
         old_gen_current: details[:old_gen_current],
@@ -157,8 +172,7 @@ defmodule JavaMonitor do
   """
   def start_monitoring(interval_ms \\ 5000) do
     # Store data in an ETS table for potential future use
-    :ets.new(:jvm_history, [:named_table, :public, :set])
-
+    IO.puts("Start monitoring ")
     spawn_link(fn -> monitoring_loop(interval_ms) end)
   end
 
@@ -216,6 +230,7 @@ defmodule JavaMonitor do
       IO.puts("App Name: #{vm.app_name}")
       IO.puts("App Variant: #{vm.app_variant}")
       IO.puts("Main Class: #{vm.main_class}")
+      IO.puts("Max Heap Size: #{vm.max_heap_size}")
 
       # Print GC information
       IO.puts("\nGarbage Collection Stats:")

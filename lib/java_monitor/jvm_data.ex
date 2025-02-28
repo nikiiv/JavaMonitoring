@@ -13,6 +13,7 @@ defmodule JavaMonitor.JvmData do
     :app_name,
     :app_variant,
     :main_class,
+    :max_heap_size,
     # GC metrics
     :old_gen_max,
     :old_gen_current,

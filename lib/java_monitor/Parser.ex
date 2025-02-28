@@ -46,6 +46,11 @@ defmodule JavaMonitor.Parser do
 
         # Extract specific GC metrics
         %{
+          # S0 S1 Eden and Old space
+          s0c_space: get_value(data, "S0C"),
+          s1c_space: get_value(data, "S1C"),
+          oc_space: get_value(data, "OC"),
+          ec_space: get_value(data, "EC"),
           # Old generation maximum size (in KB)
           old_gen_max: get_value(data, "OC"),
           # Old generation current size (in KB)
@@ -60,6 +65,7 @@ defmodule JavaMonitor.Parser do
           fgc_time: get_value(data, "FGCT"),
           # Total GC time (seconds)
           gc_total_time: get_value(data, "GCT")
+
         }
       _ ->
         %{gc_error: "Invalid jstat output format"}
@@ -68,10 +74,14 @@ defmodule JavaMonitor.Parser do
 
   defp get_value(data, key) do
     case Map.get(data, key) do
-      nil -> "N/A"
-      value -> value
+      nil -> 0
+      value -> case Float.parse(value) do
+        {float_value, _rest} -> float_value |> round()
+        :error -> 0.0
+      end
     end
   end
+
 
   @doc """
   Extracts application information from the parsed jinfo output.
@@ -85,16 +95,53 @@ defmodule JavaMonitor.Parser do
 
     # Extract main class from sun.java.command or similar property
     main_class = extract_main_class(flags)
+    max_heap_size =
+    extract_property(flags, "-XX:MaxHeapSize")
+    |> String.to_integer()
+    |> then(fn x -> x / 1024.0 end)
+    |> Float.to_string()
+
     flags = extract_property(flags, "VM Flags")
     IO.inspect(flags, label: "flags")
 
     %{
       app_name: app_name,
       variant: variant,
-      main_class: main_class
+      main_class: main_class,
+      max_heap_size: max_heap_size
     }
   end
 
+   @doc """
+  Parses the output of the jinfo -flags command.
+  """
+  def parse_flags_output(output) do
+    output
+    |> String.trim()
+    |> String.split("\n")
+    |> tl()
+    |> List.first()
+    |> String.split(" ", trim: true)
+    |> Enum.reduce(%{}, fn line, acc ->
+      case String.split(line, "=", parts: 2) do
+        [key, value] -> Map.put(acc, key, value)
+        [key] -> Map.put(acc, key, nil)
+      end
+    end)
+#    |> IO.inspect()
+  end
+
+
+
+  @doc """
+  Prints all keys and values of a map.
+  """
+  def print_keys_and_values(map) when is_map(map) do
+    map
+    |> Enum.each(fn {key, value} ->
+      IO.puts("#{key}: #{value}")
+    end)
+  end
   defp extract_property(flags, property_name) do
     flags
     |> Map.keys()
